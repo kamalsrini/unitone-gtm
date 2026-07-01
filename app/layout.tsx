@@ -15,7 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3">
             <Link href="/" className="flex items-center gap-2.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="https://unitone.ai/images/unitone-logo-white-full.png" alt="UnitOne" className="h-9 w-auto" />
+              <img src="https://unitone.ai/images/unitone-logo-white-full.png" alt="UnitOne" className="h-14 w-auto" />
               <span className="text-sm font-semibold tracking-tight text-muted">GTM Engine</span>
             </Link>
             <nav className="flex items-center gap-1 text-sm">
