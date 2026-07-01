@@ -39,7 +39,19 @@ export async function POST(req: Request) {
       name: body.name,
       persona: body.persona ?? "vp_engineering",
       channel: body.channel ?? "email",
-      config: { segments: body.segments ?? [], accounts: body.accounts ?? [] },
+      config: {
+        segments: body.segments ?? [],
+        accounts: body.accounts ?? [],
+        ...(body.brief ? { brief: body.brief } : {}),
+        // Per-layer configs (same keys the plain-English AI layer editor writes)
+        ...(body.layers && typeof body.layers === "object"
+          ? Object.fromEntries(
+              (["signals", "enroll", "replies"] as const)
+                .filter((k) => body.layers[k] && typeof body.layers[k] === "object")
+                .map((k) => [k, body.layers[k]])
+            )
+          : {}),
+      },
       sequenceId: body.sequenceId ?? null,
       autoEnroll: !!body.autoEnroll,
     });

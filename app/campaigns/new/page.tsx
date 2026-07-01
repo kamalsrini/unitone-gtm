@@ -1,6 +1,16 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+
+interface AiDraft {
+  name: string;
+  segments: string[];
+  persona: string;
+  channel: string;
+  accounts: { name: string; domain: string; segment: string }[];
+  layers: Record<string, any>;
+  brief: string;
+}
 
 const SEGMENTS = [
   { k: "modern_tech", l: "Modern Tech", d: "Cloud-native SaaS (Rippling, Datadog, Figma…)" },
@@ -28,6 +38,15 @@ export default function NewCampaign() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // AI describe-it flow
+  const [description, setDescription] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [drafting, setDrafting] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiSummary, setAiSummary] = useState("");
+  const [draft, setDraft] = useState<AiDraft | null>(null);
+
   useEffect(() => {
     fetch("/api/sequences").then((r) => r.json()).then((d) => {
       setSequences(d.sequences ?? []);
@@ -39,13 +58,43 @@ export default function NewCampaign() {
     setSegments((s) => (s.includes(k) ? s.filter((x) => x !== k) : [...s, k]));
   }
 
+  async function draftWithAI() {
+    setAiError("");
+    if (!description.trim() && !file) { setAiError("Describe the campaign or attach a document first."); return; }
+    setDrafting(true);
+    try {
+      const fd = new FormData();
+      fd.append("description", description);
+      if (file) fd.append("file", file);
+      const res = await fetch("/api/campaigns/parse", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.ok) { setAiError(data.error ?? "Couldn't draft the campaign."); return; }
+      const d: AiDraft = data.draft;
+      setDraft(d);
+      setAiSummary(data.summary ?? "");
+      if (d.name) setName(d.name);
+      if (d.segments.length) setSegments(d.segments);
+      if (d.persona) setPersona(d.persona);
+      if (d.channel) setChannel(d.channel);
+    } catch (e: any) {
+      setAiError(String(e?.message ?? e));
+    } finally {
+      setDrafting(false);
+    }
+  }
+
   async function submit(launch: boolean) {
     setError("");
     if (!name.trim()) { setError("Give the campaign a name."); return; }
     setSubmitting(true);
     const res = await fetch("/api/campaigns", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, segments, persona, channel, autoEnroll, sequenceId: sequenceId || null }),
+      body: JSON.stringify({
+        name, segments, persona, channel, autoEnroll, sequenceId: sequenceId || null,
+        accounts: draft?.accounts ?? [],
+        layers: draft?.layers ?? {},
+        brief: draft?.brief || undefined,
+      }),
     });
     const data = await res.json();
     if (!res.ok || data.error) { setError(data.error ?? "Failed to create campaign"); setSubmitting(false); return; }
@@ -60,7 +109,52 @@ export default function NewCampaign() {
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">New Campaign</h1>
-        <p className="mt-1 text-sm text-muted">Define the ICP and persona. Launching runs all five layers end-to-end.</p>
+        <p className="mt-1 text-sm text-muted">Describe it in plain English (attach a doc if you have one) and let AI draft the setup — or fill in the form directly. Launching runs all five layers end-to-end.</p>
+      </div>
+
+      <div className="card space-y-3 border-accent/30 p-5">
+        <label className="label">Describe the campaign <span className="text-muted/60">(AI drafts ICP, persona &amp; targeting)</span></label>
+        <textarea
+          className="input min-h-[110px] resize-y"
+          placeholder={"e.g. Target OT/building-automation controls companies in the Niagara ecosystem ahead of the CRA deadline. Go after VP Eng and CTO with the security-fixes angle. Companies like JCI, Honeywell, Tridium…"}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <input ref={fileRef} type="file" className="hidden" accept=".pdf,.docx,.md,.txt,.csv"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <button type="button" onClick={() => fileRef.current?.click()} className="btn-ghost text-xs">
+            {file ? "Change document" : "Attach document"}
+          </button>
+          {file && (
+            <span className="flex items-center gap-2 rounded-lg border border-line px-2 py-1 text-xs text-muted">
+              {file.name}
+              <button type="button" className="text-muted hover:text-white" onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = ""; }}>✕</button>
+            </span>
+          )}
+          <span className="text-xs text-muted/60">PDF, Word, Markdown, or plain text</span>
+          <button type="button" disabled={drafting} onClick={draftWithAI} className="btn-primary ml-auto">
+            {drafting ? "Drafting…" : "Draft campaign with AI"}
+          </button>
+        </div>
+        {aiError && <p className="rounded-lg bg-hot/10 px-3 py-2 text-xs text-hot">{aiError}</p>}
+        {draft && (
+          <div className="space-y-2 rounded-lg border border-accent/30 bg-accent/5 p-3">
+            <p className="text-xs text-accent">✓ {aiSummary || "Draft applied — review below, tweak anything, then create."}</p>
+            {draft.brief && <p className="text-xs text-muted">{draft.brief}</p>}
+            {draft.accounts.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {draft.accounts.map((a) => (
+                  <span key={a.domain} className="rounded bg-line/50 px-2 py-0.5 text-[11px] text-muted">{a.name}</span>
+                ))}
+                <span className="px-1 text-[11px] text-muted/60">will be added as named target accounts</span>
+              </div>
+            )}
+            {Object.keys(draft.layers).length > 0 && (
+              <p className="text-[11px] text-muted/60">Pre-configured layers: {Object.keys(draft.layers).join(", ")} — editable per layer after creation.</p>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="card space-y-2 p-5">
