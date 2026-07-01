@@ -24,3 +24,28 @@ export async function instantlyCampaignStats(campaignId: string): Promise<Instan
     };
   } catch { return null; }
 }
+
+export interface InstantlyLead { company: string; email: string; first_name: string; last_name: string; status: any; }
+export async function instantlyCampaignLeads(campaignId: string): Promise<InstantlyLead[]> {
+  if (!instantlyConfigured() || !campaignId) return [];
+  try {
+    const r = await ipost(`/leads/list`, { campaign: campaignId, limit: 100 });
+    return (r.items ?? []).map((l: any) => ({
+      company: l.company_name || "", email: l.email || "",
+      first_name: l.first_name || "", last_name: l.last_name || "", status: l.status,
+    }));
+  } catch { return []; }
+}
+
+export interface InstantlyStep { step: number; delay: number; variants: { subject: string; body: string }[]; }
+export async function instantlyCampaignSequence(campaignId: string): Promise<InstantlyStep[]> {
+  if (!instantlyConfigured() || !campaignId) return [];
+  try {
+    const c = await iget(`/campaigns/${campaignId}`);
+    const steps = c?.sequences?.[0]?.steps ?? [];
+    return steps.map((st: any, i: number) => ({
+      step: i + 1, delay: st.delay ?? 0,
+      variants: (st.variants ?? []).map((v: any) => ({ subject: v.subject || "", body: v.body || "" })),
+    }));
+  } catch { return []; }
+}

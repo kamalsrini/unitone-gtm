@@ -43,13 +43,14 @@ export default function CampaignMonitor({ params }: { params: Promise<{ id: stri
   if (!data) return <div className="card p-10 text-center text-muted">Loading campaign…</div>;
   if (data.error) return <div className="card p-10 text-center text-hot">{data.error}</div>;
 
-  const { campaign: c, stats: s, accounts, signals, contacts, messages, replies } = data;
+  const { campaign: c, stats: s, accounts, signals, contacts, messages, replies, sequence = [] } = data;
+  const linked = !!(c.config?.instantly_campaign_id);
   const ls = c.layer_state ?? {};
   const max = Math.max(s.accounts ?? 1, 1);
   const tabs = [
     ["accounts", `Accounts ${accounts.length}`], ["signals", `Signals ${signals.length}`],
     ["messages", `Messages ${messages.length}`], ["contacts", `Contacts ${contacts.length}`],
-    ["replies", `Replies ${replies.length}`],
+    ["replies", `Replies ${replies.length}`], ["sequence", `Sequence ${sequence.length}`],
   ];
 
   return (
@@ -63,9 +64,13 @@ export default function CampaignMonitor({ params }: { params: Promise<{ id: stri
           </div>
           <p className="mt-1 text-sm capitalize text-muted">{String(c.persona).replace("_", " ")} · {c.channel} · {(c.config?.segments ?? []).join(", ") || "all segments"}</p>
         </div>
-        <button onClick={() => runLayer()} disabled={running !== null} className="btn-primary">
-          {running === "all" ? "Running pipeline…" : "▶ Run full pipeline"}
-        </button>
+        {linked ? (
+          <span className="chip bg-ok/15 text-ok">● Live from Instantly</span>
+        ) : (
+          <button onClick={() => runLayer()} disabled={running !== null} className="btn-primary">
+            {running === "all" ? "Running pipeline…" : "▶ Run full pipeline"}
+          </button>
+        )}
       </div>
 
       {/* 5-layer pipeline with per-layer run buttons */}
@@ -80,7 +85,7 @@ export default function CampaignMonitor({ params }: { params: Promise<{ id: stri
               </div>
               <div className="mt-1.5 text-sm font-semibold text-white">{l.label}</div>
               <div className="mt-1 text-xs leading-snug text-muted">{l.desc}</div>
-              <button onClick={() => runLayer(l.key)} disabled={running !== null}
+              <button onClick={() => runLayer(l.key)} disabled={running !== null || linked}
                 className="mt-3 w-full rounded-md border border-line py-1 text-xs text-muted hover:border-accent/60 hover:text-white disabled:opacity-50">
                 {running === l.key ? "Running…" : "Run layer"}
               </button>
@@ -123,7 +128,31 @@ export default function CampaignMonitor({ params }: { params: Promise<{ id: stri
         {tab === "messages" && <MessagesList rows={messages} />}
         {tab === "contacts" && <ContactsTable rows={contacts} />}
         {tab === "replies" && <RepliesList rows={replies} onUpdate={load} />}
+        {tab === "sequence" && <SequenceView steps={sequence} />}
       </div>
+    </div>
+  );
+}
+
+function SequenceView({ steps }: { steps: any[] }) {
+  if (!steps?.length) return <Empty msg="No sequence steps found — is INSTANTLY_API_KEY set and the campaign linked?" />;
+  return (
+    <div className="space-y-3">
+      {steps.map((st: any) => (
+        <div key={st.step} className="card p-4">
+          <div className="mb-2 flex items-center gap-2">
+            <span className="chip bg-accent/15 text-accent">Step {st.step}</span>
+            <span className="text-xs text-muted">wait {st.delay}d before next</span>
+          </div>
+          {st.variants.map((v: any, i: number) => (
+            <div key={i} className={i > 0 ? "mt-3 border-t border-line pt-3" : "mt-1"}>
+              {st.variants.length > 1 && <div className="text-[11px] uppercase tracking-wider text-muted">Variant {String.fromCharCode(65 + i)}</div>}
+              <div className="mt-1 text-sm font-medium text-accent2">{v.subject || "(no subject)"}</div>
+              <pre className="mt-1 whitespace-pre-wrap scrollbar-thin text-xs leading-relaxed text-muted">{v.body}</pre>
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

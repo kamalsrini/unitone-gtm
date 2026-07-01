@@ -34,6 +34,9 @@ async function run(req: Request) {
       id = ins.rows[0].id;
     }
     await sql`DELETE FROM accounts WHERE campaign_id = ${id}`;
+    await sql`DELETE FROM signals WHERE campaign_id = ${id}`;
+    await sql`DELETE FROM contacts WHERE campaign_id = ${id}`;
+    await sql`DELETE FROM messages WHERE campaign_id = ${id}`;
     for (const a of ACCOUNTS) {
       await sql`INSERT INTO accounts (campaign_id, name, domain, tier, total_score, action)
         VALUES (${id}, ${a.name}, ${a.domain}, ${a.tier}, 90, 'Engage')`;
