@@ -21,6 +21,6 @@ export async function GET() {
       m.totals.contacts = (m.totals.contacts || 0) + live.leads;
       m.totals.enrolled = (m.totals.enrolled || 0) + live.leads;
     }
-    return NextResponse.json(m);
+    return NextResponse.json(m, { headers: { "Cache-Control": "no-store" } });
   } catch (e: any) { return NextResponse.json({ error: String(e?.message ?? e), needsInit: true }, { status: 200 }); }
 }

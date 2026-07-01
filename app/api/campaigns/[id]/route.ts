@@ -58,5 +58,5 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       out.stats = { ...out.stats, accounts: out.accounts.length };
     }
   }
-  return NextResponse.json(out);
+  return NextResponse.json(out, { headers: { "Cache-Control": "no-store" } });
 }

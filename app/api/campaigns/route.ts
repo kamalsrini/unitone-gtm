@@ -21,7 +21,7 @@ export async function GET() {
       }
       return { ...c, stats };
     }));
-    return NextResponse.json({ campaigns: withStats });
+    return NextResponse.json({ campaigns: withStats }, { headers: { "Cache-Control": "no-store" } });
   } catch (e: any) {
     return NextResponse.json({ campaigns: [], needsInit: true, error: String(e?.message ?? e) });
   }
