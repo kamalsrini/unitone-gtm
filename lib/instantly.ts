@@ -1,7 +1,7 @@
 /** Live Instantly campaign stats for the dashboard funnel (read-only). */
 const IBASE = "https://api.instantly.ai/api/v2";
 function ihdr() {
-  return { Authorization: `Bearer ${process.env.INSTANTLY_API_KEY || ""}`, "User-Agent": "unitone-gtm/1.0", Accept: "application/json" };
+  return { Authorization: `Bearer ${process.env.INSTANTLY_API_KEY || ""}`, "User-Agent": "curl/8.4.0", Accept: "application/json" };
 }
 export function instantlyConfigured() { return !!process.env.INSTANTLY_API_KEY; }
 async function iget(p: string) { const r = await fetch(IBASE + p, { headers: ihdr(), cache: "no-store" }); if (!r.ok) throw new Error(`Instantly ${r.status}`); return r.json(); }
