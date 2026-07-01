@@ -3,6 +3,7 @@ import { createCampaign, listCampaigns, getStats, initSchema } from "@/lib/db";
 import { instantlyCampaignStats } from "@/lib/instantly";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   try {
@@ -17,6 +18,8 @@ export async function GET() {
           stats.replies = live.replies; stats.meetings = live.meetings;
           stats.contacts = Math.max(stats.contacts, live.leads);
           stats.enrolled = Math.max(stats.enrolled, live.leads);
+          const companies = Object.keys(live.byCompany || {}).length;
+          if (companies) { stats.accounts = companies; stats.hot = companies; stats.warm = 0; stats.signals = 0; stats.messages = 0; }
         }
       }
       return { ...c, stats };

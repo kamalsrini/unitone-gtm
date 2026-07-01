@@ -4,6 +4,7 @@ import { getCampaign, getStats } from "@/lib/db";
 import { instantlyCampaignStats, instantlyCampaignLeads, instantlyCampaignSequence } from "@/lib/instantly";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -55,7 +56,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
           intent_score: null, matched_signals: null, action: "In sequence",
         });
       }
-      out.stats = { ...out.stats, accounts: out.accounts.length };
+      out.accounts = out.accounts.map((a: any) => ({ ...a, tier: "TIER 1 — HOT" }));
+      out.signals = [];
+      out.messages = [];
+      out.stats = { ...out.stats, accounts: out.accounts.length, hot: out.accounts.length, warm: 0, signals: 0, messages: 0 };
     }
   }
   return NextResponse.json(out, { headers: { "Cache-Control": "no-store" } });
