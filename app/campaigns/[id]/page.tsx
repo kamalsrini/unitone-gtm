@@ -8,14 +8,12 @@ const LAYER_STATE_CLS: Record<string, string> = {
   error: "border-hot/60 bg-hot/10", pending: "border-line bg-ink/40",
 };
 
-const LAYER_TAB: Record<string, string> = { signals: "accounts", enroll: "contacts", content: "sequence", monitor: "accounts", replies: "replies" };
 
 export default function CampaignMonitor({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [data, setData] = useState<any>(null);
   const [tab, setTab] = useState("accounts");
   const [running, setRunning] = useState<string | null>(null);
-  const [editor, setEditor] = useState<{ layer: string; label: string; text: string } | null>(null);
 
   const load = useCallback(async () => {
     const d = await fetch(`/api/campaigns/${id}`).then((r) => r.json());
@@ -43,17 +41,6 @@ export default function CampaignMonitor({ params }: { params: Promise<{ id: stri
     load();
   }
 
-  function openLayerEditor(layer: string, label: string) {
-    const cfg = (data?.campaign?.config?.[layer]) ?? {};
-    setEditor({ layer, label, text: JSON.stringify(cfg, null, 2) });
-  }
-  async function saveLayer() {
-    if (!editor) return;
-    let parsed: any;
-    try { parsed = JSON.parse(editor.text || "{}"); } catch { alert("Invalid JSON — please fix and try again."); return; }
-    await fetch(`/api/campaigns/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ layer: editor.layer, config: parsed }) });
-    setEditor(null); load();
-  }
   async function deleteCampaign() {
     if (!confirm(`Delete "${data?.campaign?.name}"? This permanently removes the campaign and its data from the dashboard (your Instantly campaign is not affected).`)) return;
     await fetch(`/api/delete-campaign?id=${id}&force=1`);
@@ -101,20 +88,15 @@ export default function CampaignMonitor({ params }: { params: Promise<{ id: stri
         {LAYER_DEFS.map((l) => {
           const st = ls[l.key] ?? "pending";
           return (
-            <div key={l.key} onClick={() => setTab(LAYER_TAB[l.key])} className={`card cursor-pointer p-4 transition hover:border-accent/50 ${LAYER_STATE_CLS[st]}`}>
+            <Link key={l.key} href={`/campaigns/${id}/layers/${l.key}`} className={`card block p-4 transition hover:border-accent/60 ${LAYER_STATE_CLS[st]}`}>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold tracking-wider text-muted">LAYER {l.n}</span>
                 <span className="text-[10px] uppercase tracking-wider text-muted">{st}</span>
               </div>
               <div className="mt-1.5 text-sm font-semibold text-white">{l.label}</div>
               <div className="mt-1 text-xs leading-snug text-muted">{l.desc}</div>
-              <div className="mt-3 flex gap-1.5">
-                <button onClick={(e) => { e.stopPropagation(); setTab(LAYER_TAB[l.key]); }}
-                  className="flex-1 rounded-md border border-line py-1 text-xs text-muted hover:border-accent/60 hover:text-white">View</button>
-                <button onClick={(e) => { e.stopPropagation(); openLayerEditor(l.key, l.label); }}
-                  className="flex-1 rounded-md border border-line py-1 text-xs text-muted hover:border-accent/60 hover:text-white">Edit</button>
-              </div>
-            </div>
+              <div className="mt-3 text-xs font-medium text-accent">View & edit →</div>
+            </Link>
           );
         })}
       </div>
@@ -155,24 +137,6 @@ export default function CampaignMonitor({ params }: { params: Promise<{ id: stri
         {tab === "replies" && <RepliesList rows={replies} onUpdate={load} />}
         {tab === "sequence" && <SequenceView steps={sequence} />}
       </div>
-
-      {editor && (
-        <div className="fixed inset-0 z-40 grid place-items-center bg-black/60 p-4" onClick={() => setEditor(null)}>
-          <div className="card w-full max-w-2xl p-5" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="font-semibold text-white">Edit — {editor.label}</h3>
-              <button onClick={() => setEditor(null)} className="text-muted hover:text-white">✕</button>
-            </div>
-            <p className="mb-2 text-xs text-muted">Per-campaign config for this layer (JSON). Saved to this campaign.</p>
-            <textarea value={editor.text} onChange={(e) => setEditor({ ...editor, text: e.target.value })} spellCheck={false}
-              className="h-64 w-full rounded-lg border border-line bg-ink/60 p-3 font-mono text-xs text-white" />
-            <div className="mt-3 flex justify-end gap-2">
-              <button onClick={() => setEditor(null)} className="rounded-lg border border-line px-3 py-1.5 text-sm text-muted">Cancel</button>
-              <button onClick={saveLayer} className="btn-primary">Save</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

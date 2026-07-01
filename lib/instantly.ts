@@ -57,3 +57,18 @@ export async function instantlyCampaignSequence(campaignId: string): Promise<Ins
     }));
   } catch { return []; }
 }
+
+export async function updateInstantlyCampaignSequence(campaignId: string, steps: any[]): Promise<boolean> {
+  if (!instantlyConfigured() || !campaignId) return false;
+  try {
+    const payload = { sequences: [{ steps: (steps || []).map((st: any) => ({
+      type: "email", delay: st.delay ?? 0, delay_unit: "days", pre_delay_unit: "days",
+      variants: (st.variants ?? []).map((v: any) => ({ subject: v.subject || "", body: v.body || "" })),
+    })) }] };
+    const res = await fetch(`${IBASE}/campaigns/${campaignId}`, {
+      method: "PATCH", headers: { ...ihdr(), "Content-Type": "application/json" },
+      body: JSON.stringify(payload), cache: "no-store",
+    });
+    return res.ok;
+  } catch { return false; }
+}
