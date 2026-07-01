@@ -78,6 +78,7 @@ export default function LayerScreen({ params }: { params: Promise<{ id: string; 
             </div>
           ))}
           <p className="text-xs text-muted">Tokens {"{{firstName}}"}, {"{{companyName}}"}, {"{{icebreaker}}"} are filled per lead at send time. Saving writes directly to the live Instantly campaign.</p>
+          <NLEditor id={id} layer={layer} onSaved={load} hint="Or just describe it: e.g. make the emails shorter and less formal; lead with the 90% vs 3% number; soften step 5" />
         </div>
       )}
 
@@ -96,7 +97,7 @@ export default function LayerScreen({ params }: { params: Promise<{ id: string; 
             {(data.signals ?? []).length === 0 ? <Empty msg="No signals (named-account targeting — accounts were hand-selected, not signal-scored)." /> :
               <div className="space-y-2">{data.signals.map((sig: any) => (<div key={sig.id} className="flex items-center gap-3 rounded-lg border border-line p-2.5"><StrengthChip s={sig.signal_strength} /><div className="min-w-0 flex-1"><div className="text-sm text-white">{sig.company} <span className="text-xs text-muted">· {sig.signal_type}</span></div><div className="truncate text-xs text-muted">{sig.detail}</div></div>{sig.url && <a href={sig.url} target="_blank" className="text-xs text-accent hover:underline">open ↗</a>}</div>))}</div>}
           </Section>
-          <ConfigEditor id={id} layer={layer} config={c?.config?.signals ?? {}} onSaved={load} hint="ICP scoring weights / segments for this campaign." />
+          <NLEditor id={id} layer={layer} onSaved={load} hint="e.g. weight companies with recent CVEs higher; prioritize building-automation over factory automation; drop anyone under 1,000 engineers" />
         </div>
       )}
 
@@ -110,7 +111,7 @@ export default function LayerScreen({ params }: { params: Promise<{ id: string; 
               <table className="w-full text-sm"><thead className="text-left text-xs uppercase tracking-wider text-muted"><tr className="border-b border-line"><th className="px-3 py-2">Name</th><th className="px-3 py-2">Company</th><th className="px-3 py-2">Email</th><th className="px-3 py-2">Status</th></tr></thead>
                 <tbody>{data.contacts.map((ct: any) => (<tr key={ct.id} className="border-b border-line/40"><td className="px-3 py-2 font-medium text-white">{ct.name}</td><td className="px-3 py-2 text-muted">{ct.company}</td><td className="px-3 py-2 text-muted">{ct.email}</td><td className="px-3 py-2"><span className="chip bg-ok/15 text-ok">{ct.status}</span></td></tr>))}</tbody></table>}
           </Section>
-          <ConfigEditor id={id} layer={layer} config={c?.config?.enroll ?? {}} onSaved={load} hint="Apollo search filters (titles, seniorities, employee ranges, domains) for this campaign." />
+          <NLEditor id={id} layer={layer} onSaved={load} hint="e.g. also target Directors of Product Security; US only; 1,000-10,000 employees; verified emails only" />
         </div>
       )}
 
@@ -120,7 +121,7 @@ export default function LayerScreen({ params }: { params: Promise<{ id: string; 
             <Kpi l="Sent" v={s.sent} accent="text-ok" /><Kpi l="Opens" v={s.opens} /><Kpi l="Clicks" v={s.clicks} /><Kpi l="Replies" v={s.replies} accent="text-warm" /><Kpi l="Meetings" v={s.meetings} accent="text-ok" /><Kpi l="Contacts" v={s.contacts} />
           </div>
           <p className="text-xs text-muted">Live from Instantly. Open-rate tracking is intentionally off (deliverability); reply rate is the tracked metric. A daily health digest posts to Slack at 8:30am ET.</p>
-          <ConfigEditor id={id} layer={layer} config={c?.config?.monitor ?? {}} onSaved={load} hint="Alerting thresholds (e.g. spam-blocked kill-switch, bounce cap) for this campaign." />
+          <NLEditor id={id} layer={layer} onSaved={load} hint="e.g. pause the campaign if spam-blocked passes 2%; cap sends at 20/day; alert me on any reply" />
         </div>
       )}
 
@@ -131,7 +132,7 @@ export default function LayerScreen({ params }: { params: Promise<{ id: string; 
             {(data.replies ?? []).length === 0 ? <Empty msg="No replies yet." /> :
               <div className="space-y-2">{data.replies.map((rp: any) => (<div key={rp.id} className="rounded-lg border border-line p-3"><div className="flex items-center justify-between"><span className="text-sm text-white">{rp.from_email}</span><span className="chip bg-accent/15 text-accent">{rp.intent}</span></div><div className="mt-1 text-xs text-muted">{rp.summary}</div></div>))}</div>}
           </Section>
-          <ConfigEditor id={id} layer={layer} config={c?.config?.replies ?? {}} onSaved={load} hint="Reply-triage settings (Calendly link, tone, auto-classify rules) for this campaign." />
+          <NLEditor id={id} layer={layer} onSaved={load} hint="e.g. be more direct about booking a call; warmer tone; treat pricing questions as high priority" />
         </div>
       )}
     </div>
@@ -146,26 +147,30 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 function Empty({ msg }: { msg: string }) { return <div className="py-4 text-center text-sm text-muted">{msg}</div>; }
 
-function ConfigEditor({ id, layer, config, onSaved, hint }: { id: string; layer: string; config: any; onSaved: () => void; hint?: string }) {
-  const [text, setText] = useState(JSON.stringify(config ?? {}, null, 2));
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState("");
-  useEffect(() => { setText(JSON.stringify(config ?? {}, null, 2)); }, [config]);
-  async function save() {
-    let parsed: any;
-    try { parsed = JSON.parse(text || "{}"); } catch { setMsg("Invalid JSON"); return; }
-    setSaving(true); setMsg("");
-    await fetch(`/api/campaigns/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ layer, config: parsed }) });
-    setSaving(false); setMsg("Saved ✓"); onSaved();
+function NLEditor({ id, layer, onSaved, hint }: { id: string; layer: string; onSaved: () => void; hint?: string }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState("");
+  async function apply() {
+    if (!text.trim()) return;
+    setBusy(true); setResult("");
+    try {
+      const res = await fetch(`/api/campaigns/${id}/layers/${layer}/ai`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ feedback: text }) }).then((r) => r.json());
+      setResult(res.ok ? `✓ ${res.summary}` : `⚠ ${res.error}`);
+      if (res.ok) { setText(""); onSaved(); }
+    } catch (e: any) { setResult(`⚠ ${String(e?.message ?? e)}`); }
+    setBusy(false);
   }
   return (
     <div className="card p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">Edit this layer</h3>
-        <div className="flex items-center gap-3">{msg && <span className="text-xs text-ok">{msg}</span>}<button onClick={save} disabled={saving} className="btn-primary">{saving ? "Saving…" : "Save config"}</button></div>
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted">Edit this layer — in plain English</h3>
+      <p className="mb-2 mt-1 text-xs text-muted">Describe the change you want. AI translates it into this layer&apos;s settings and applies it — no JSON.</p>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={hint} spellCheck={false}
+        className="h-24 w-full rounded-lg border border-line bg-ink/60 p-3 text-sm text-white" />
+      <div className="mt-2 flex items-center justify-between">
+        {result ? <span className={`text-xs ${result.startsWith("✓") ? "text-ok" : "text-hot"}`}>{result}</span> : <span className="text-xs text-muted/70">Powered by Claude</span>}
+        <button onClick={apply} disabled={busy || !text.trim()} className="btn-primary">{busy ? "Applying…" : "Apply with AI"}</button>
       </div>
-      {hint && <p className="mb-2 text-xs text-muted">{hint}</p>}
-      <textarea value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} className="h-40 w-full rounded-lg border border-line bg-ink/60 p-3 font-mono text-xs text-white" />
     </div>
   );
 }
