@@ -14,8 +14,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="sticky top-0 z-20 border-b border-line bg-ink/70 backdrop-blur">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3">
             <Link href="/" className="flex items-center gap-2.5">
-              <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-accent to-accent2 font-bold text-white">U1</span>
-              <span className="font-semibold tracking-tight">UnitOne <span className="text-muted">GTM Engine</span></span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="https://unitone.ai/images/unitone-logo-white-full.png" alt="UnitOne" className="h-6 w-auto" />
+              <span className="text-sm font-semibold tracking-tight text-muted">GTM Engine</span>
             </Link>
             <nav className="flex items-center gap-1 text-sm">
               <Link href="/" className="rounded-lg px-3 py-1.5 text-muted hover:text-white">Dashboard</Link>

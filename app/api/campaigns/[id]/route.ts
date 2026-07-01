@@ -64,3 +64,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   }
   return NextResponse.json(out, { headers: { "Cache-Control": "no-store" } });
 }
+
+
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const cid = Number(id);
+  const body = await req.json().catch(() => ({}));
+  if (!body?.layer) return NextResponse.json({ error: "layer required" }, { status: 400 });
+  const key = "{" + String(body.layer) + "}";
+  await sql`UPDATE campaigns SET config = jsonb_set(coalesce(config, '{}'::jsonb), ${key}, ${JSON.stringify(body.config ?? {})}::jsonb), updated_at = now() WHERE id = ${cid}`;
+  return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+}

@@ -12,8 +12,9 @@ async function run(req: Request) {
   const { rows } = await sql`SELECT config FROM campaigns WHERE id=${id}`;
   if (!rows[0]) return NextResponse.json({ error: "not found" }, { status: 404 });
   // Safety: never delete an Instantly-linked (real) campaign via this route.
-  if ((rows[0].config as any)?.instantly_campaign_id) {
-    return NextResponse.json({ error: "refusing to delete an Instantly-linked campaign" }, { status: 400 });
+  const force = new URL(req.url).searchParams.get("force") === "1";
+  if ((rows[0].config as any)?.instantly_campaign_id && !force) {
+    return NextResponse.json({ error: "linked to Instantly — pass force=1 to confirm" }, { status: 400 });
   }
   await sql`DELETE FROM campaigns WHERE id=${id}`; // cascades to accounts/signals/contacts/messages/events
   return NextResponse.json({ ok: true, deleted: id });

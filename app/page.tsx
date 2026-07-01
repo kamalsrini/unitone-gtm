@@ -101,7 +101,12 @@ export default function Dashboard() {
               <Link key={c.id} href={`/campaigns/${c.id}`} className="card group p-4 transition-colors hover:border-accent/50">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-white group-hover:text-accent">{c.name}</span>
-                  <StatusBadge status={c.status} />
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={c.status} />
+                    <button
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (confirm(`Delete "${c.name}"? This removes it from the dashboard (your Instantly campaign is unaffected).`)) fetch(`/api/delete-campaign?id=${c.id}&force=1`).then(() => load()); }}
+                      className="rounded-md border border-hot/40 px-2 py-0.5 text-[11px] text-hot hover:bg-hot/10">Delete</button>
+                  </div>
                 </div>
                 <div className="mt-1 text-xs text-muted capitalize">{String(c.persona).replace("_", " ")} · {c.channel}</div>
                 <div className="mt-3 grid grid-cols-4 gap-2 text-center">
