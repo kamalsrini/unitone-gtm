@@ -12,7 +12,15 @@ export interface InstantlyLive { sent: number; opens: number; clicks: number; re
 export async function instantlyCampaignStats(campaignId: string): Promise<InstantlyLive | null> {
   if (!instantlyConfigured() || !campaignId) return null;
   try {
-    const o = await iget(`/campaigns/analytics/overview?id=${campaignId}`);
+    // Instantly's overview intermittently returns 0 from serverless IPs — retry and keep the real value.
+    let o: any = {};
+    for (let i = 0; i < 3; i++) {
+      try {
+        const r = await iget(`/campaigns/analytics/overview?id=${campaignId}`);
+        if ((r?.emails_sent_count || 0) >= (o?.emails_sent_count || 0)) o = r;
+        if ((r?.emails_sent_count || 0) > 0) break;
+      } catch {}
+    }
     let leads: any[] = [];
     try { leads = (await ipost(`/leads/list`, { campaign: campaignId, limit: 100 })).items ?? []; } catch {}
     const byCompany: Record<string, number> = {};
