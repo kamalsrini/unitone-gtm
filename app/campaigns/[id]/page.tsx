@@ -92,9 +92,9 @@ export default function CampaignMonitor({ params }: { params: Promise<{ id: stri
       {linked && data.dataStatus !== "live" && (
         <div className="rounded-lg border border-watch/40 bg-watch/10 px-4 py-3 text-sm text-watch">
           {data.dataStatus === "cache" ? (
-            <>Showing the last synced snapshot{data.dataUpdatedAt ? ` from ${new Date(data.dataUpdatedAt).toLocaleString()}` : ""}. Live Instantly sync is currently failing — most likely the workspace plan is inactive (HTTP 402). Reactivate the Instantly plan to resume live metrics and sending.</>
+            <>{`Showing the last synced snapshot${data.dataUpdatedAt ? ` from ${new Date(data.dataUpdatedAt).toLocaleString()}` : ""}. Live Instantly sync is currently failing \u2014 most likely the workspace plan is inactive (HTTP 402). Reactivate the Instantly plan to resume live metrics and sending.`}</>
           ) : (
-            <>Can\'t reach Instantly right now — most likely the workspace plan is inactive (HTTP 402 Payment Required). No synced snapshot exists yet, so the funnel below reads 0. Reactivate the Instantly plan in Instantly to resume sync and sending. Accounts shown are this campaign\'s real targets.</>
+            <>{"Can\u2019t reach Instantly right now \u2014 most likely the workspace plan is inactive (HTTP 402 Payment Required). No synced snapshot exists yet, so the funnel below reads 0. Reactivate the Instantly plan in Instantly to resume sync and sending. Accounts shown are this campaign\u2019s real targets."}</>
           )}
         </div>
       )}
