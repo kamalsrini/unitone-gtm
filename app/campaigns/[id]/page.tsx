@@ -73,7 +73,13 @@ export default function CampaignMonitor({ params }: { params: Promise<{ id: stri
         </div>
         <div className="flex items-center gap-2">
           {linked ? (
-            <span className="chip bg-ok/15 text-ok">● Live from Instantly</span>
+            data.dataStatus === "live" ? (
+              <span className="chip bg-ok/15 text-ok">● Live from Instantly</span>
+            ) : data.dataStatus === "cache" ? (
+              <span className="chip bg-watch/15 text-watch">◐ Cached snapshot</span>
+            ) : (
+              <span className="chip bg-hot/15 text-hot">● Instantly unreachable</span>
+            )
           ) : (
             <button onClick={() => runLayer()} disabled={running !== null} className="btn-primary">
               {running === "all" ? "Running pipeline…" : "▶ Run full pipeline"}
@@ -82,6 +88,16 @@ export default function CampaignMonitor({ params }: { params: Promise<{ id: stri
           <button onClick={deleteCampaign} className="rounded-lg border border-hot/50 px-3 py-1.5 text-sm text-hot hover:bg-hot/10">Delete</button>
         </div>
       </div>
+
+      {linked && data.dataStatus !== "live" && (
+        <div className="rounded-lg border border-watch/40 bg-watch/10 px-4 py-3 text-sm text-watch">
+          {data.dataStatus === "cache" ? (
+            <>Showing the last synced snapshot{data.dataUpdatedAt ? ` from ${new Date(data.dataUpdatedAt).toLocaleString()}` : ""}. Live Instantly sync is currently failing — most likely the workspace plan is inactive (HTTP 402). Reactivate the Instantly plan to resume live metrics and sending.</>
+          ) : (
+            <>Can\'t reach Instantly right now — most likely the workspace plan is inactive (HTTP 402 Payment Required). No synced snapshot exists yet, so the funnel below reads 0. Reactivate the Instantly plan in Instantly to resume sync and sending. Accounts shown are this campaign\'s real targets.</>
+          )}
+        </div>
+      )}
 
       {/* 5-layer pipeline with per-layer run buttons */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-5">

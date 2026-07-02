@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { listCampaigns, getStats } from "@/lib/db";
-import { instantlyCampaignStats } from "@/lib/instantly";
+import { resolveLinkedCampaign, companiesForLinked } from "@/lib/campaign-live";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,16 +15,14 @@ export async function GET() {
       const stats: any = await getStats(c.id);
       const iid = (c.config as any)?.instantly_campaign_id;
       if (iid) {
-        const live = await instantlyCampaignStats(iid);
-        if (live) {
-          const companies = Object.keys(live.byCompany || {}).length;
-          stats.accounts = companies; stats.hot = companies; stats.warm = 0;
-          stats.signals = 0; stats.messages = 0;
-          stats.contacts = live.leads; stats.enrolled = live.leads;
-          stats.sent = live.sent; stats.opens = live.opens; stats.clicks = live.clicks;
-          stats.replies = live.replies; stats.meetings = live.meetings;
-          tiers["TIER 1 — HOT"] = (tiers["TIER 1 — HOT"] || 0) + companies;
-        }
+        const snap = await resolveLinkedCampaign(c.id, iid, c.config);
+        const companies = companiesForLinked(iid, snap).length;
+        stats.accounts = companies; stats.hot = companies; stats.warm = 0;
+        stats.signals = 0; stats.messages = 0;
+        stats.contacts = snap.leads; stats.enrolled = snap.leads;
+        stats.sent = snap.sent; stats.opens = snap.opens; stats.clicks = snap.clicks;
+        stats.replies = snap.replies; stats.meetings = snap.meetings;
+        tiers["TIER 1 — HOT"] = (tiers["TIER 1 — HOT"] || 0) + companies;
       } else {
         tiers["TIER 1 — HOT"] = (tiers["TIER 1 — HOT"] || 0) + (stats.hot || 0);
         tiers["TIER 2 — WARM"] = (tiers["TIER 2 — WARM"] || 0) + (stats.warm || 0);

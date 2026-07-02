@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { sql } from "@vercel/postgres";
 import { getCampaign, getStats } from "@/lib/db";
-import { instantlyCampaignStats, instantlyCampaignLeads, instantlyCampaignSequence } from "@/lib/instantly";
+import { instantlyCampaignLeads, instantlyCampaignSequence } from "@/lib/instantly";
+import { resolveLinkedCampaign, companiesForLinked, REAL_ACCOUNTS } from "@/lib/campaign-live";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -24,43 +25,47 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     campaign, stats,
     accounts: accounts.rows, signals: signals.rows, contacts: contacts.rows,
     messages: messages.rows, replies: replies.rows, sequence: [],
+    dataStatus: "local", dataUpdatedAt: null,
   };
 
   const iid = (campaign.config as any)?.instantly_campaign_id;
   if (iid) {
-    const [live, leads, seq] = await Promise.all([
-      instantlyCampaignStats(iid), instantlyCampaignLeads(iid), instantlyCampaignSequence(iid),
-    ]);
+    // Stats: live → cached snapshot → honest "unavailable". Never demo pollution.
+    const snap = await resolveLinkedCampaign(cid, iid, campaign.config);
+    out.dataStatus = snap.source;               // live | cache | unavailable
+    out.dataUpdatedAt = snap.updatedAt;
+    out.stats = { ...stats, sent: snap.sent, opens: snap.opens, clicks: snap.clicks,
+      replies: snap.replies, meetings: snap.meetings, contacts: snap.leads, enrolled: snap.leads };
+
+    // Accounts: real companies (live leads if present, else the seeded real list). Never the accounts table.
+    const meta: Record<string, any> = Object.fromEntries((REAL_ACCOUNTS[iid] || []).map((a) => [a.name, a]));
+    const names = companiesForLinked(iid, snap);
+    out.accounts = names.map((name, i) => ({
+      id: `ic-${i}`, name, domain: meta[name]?.domain || "",
+      tier: meta[name]?.tier || "TIER 1 — HOT", total_score: 90,
+      firmographic_score: null, technographic_score: null, intent_score: null,
+      matched_signals: null, action: "In sequence",
+    }));
+
+    // Sequence: live, cached to config so "what messaging is used" stays visible even when Instantly is down.
+    let seq = await instantlyCampaignSequence(iid);
+    if (seq.length) {
+      try { await sql`UPDATE campaigns SET config = jsonb_set(coalesce(config,'{}'::jsonb), '{instantly_sequence}', ${JSON.stringify(seq)}::jsonb) WHERE id = ${cid}`; } catch {}
+    } else {
+      seq = (campaign.config as any)?.instantly_sequence || [];
+    }
     out.sequence = seq;
-    if (live) {
-      out.stats = { ...stats, sent: live.sent, opens: live.opens, clicks: live.clicks,
-        replies: live.replies, meetings: live.meetings, contacts: live.leads, enrolled: live.leads };
-    }
-    if (leads.length) {
-      // Real Instantly leads become the contacts list
-      out.contacts = leads.map((l, i) => ({
-        id: `i${i}`, name: `${l.first_name} ${l.last_name}`.trim() || l.email,
-        title: "", company: l.company, email: l.email, status: "enrolled",
-      }));
-      // Real companies (deduped) become the accounts list — keep seeded tier where present
-      const seeded: Record<string, any> = {};
-      for (const a of accounts.rows as any[]) seeded[a.name] = a;
-      const seen = new Set<string>();
-      out.accounts = [];
-      for (const l of leads) {
-        if (!l.company || seen.has(l.company)) continue;
-        seen.add(l.company);
-        out.accounts.push(seeded[l.company] ?? {
-          id: `ic-${l.company}`, name: l.company, domain: "", tier: "TIER 1 — HOT",
-          total_score: 90, firmographic_score: null, technographic_score: null,
-          intent_score: null, matched_signals: null, action: "In sequence",
-        });
-      }
-      out.accounts = out.accounts.map((a: any) => ({ ...a, tier: "TIER 1 — HOT" }));
-      out.signals = [];
-      out.messages = [];
-      out.stats = { ...out.stats, accounts: out.accounts.length, hot: out.accounts.length, warm: 0, signals: 0, messages: 0 };
-    }
+
+    // Contacts: live leads only (no fabrication when Instantly is down).
+    const leads = await instantlyCampaignLeads(iid);
+    out.contacts = leads.length
+      ? leads.map((l, i) => ({ id: `i${i}`, name: `${l.first_name} ${l.last_name}`.trim() || l.email, title: "", company: l.company, email: l.email, status: "enrolled" }))
+      : [];
+
+    out.signals = [];
+    out.messages = [];
+    const hot = out.accounts.filter((a: any) => String(a.tier).includes("HOT")).length;
+    out.stats = { ...out.stats, accounts: out.accounts.length, hot, warm: out.accounts.length - hot, signals: 0, messages: 0 };
   }
   return NextResponse.json(out, { headers: { "Cache-Control": "no-store" } });
 }

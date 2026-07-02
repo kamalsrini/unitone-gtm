@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createCampaign, listCampaigns, getStats, initSchema } from "@/lib/db";
-import { instantlyCampaignStats } from "@/lib/instantly";
+import { resolveLinkedCampaign, companiesForLinked } from "@/lib/campaign-live";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -12,15 +12,14 @@ export async function GET() {
       const stats: any = await getStats(c.id);
       const iid = (c.config as any)?.instantly_campaign_id;
       if (iid) {
-        const live = await instantlyCampaignStats(iid);
-        if (live) {
-          stats.sent = live.sent; stats.opens = live.opens; stats.clicks = live.clicks;
-          stats.replies = live.replies; stats.meetings = live.meetings;
-          stats.contacts = Math.max(stats.contacts, live.leads);
-          stats.enrolled = Math.max(stats.enrolled, live.leads);
-          const companies = Object.keys(live.byCompany || {}).length;
-          if (companies) { stats.accounts = companies; stats.hot = companies; stats.warm = 0; stats.signals = 0; stats.messages = 0; }
-        }
+        const snap = await resolveLinkedCampaign(c.id, iid, c.config);
+        stats.sent = snap.sent; stats.opens = snap.opens; stats.clicks = snap.clicks;
+        stats.replies = snap.replies; stats.meetings = snap.meetings;
+        stats.contacts = Math.max(stats.contacts || 0, snap.leads);
+        stats.enrolled = Math.max(stats.enrolled || 0, snap.leads);
+        const companies = companiesForLinked(iid, snap).length;
+        if (companies) { stats.accounts = companies; stats.hot = companies; stats.warm = 0; stats.signals = 0; stats.messages = 0; }
+        return { ...c, stats, dataStatus: snap.source };
       }
       return { ...c, stats };
     }));
@@ -43,7 +42,6 @@ export async function POST(req: Request) {
         segments: body.segments ?? [],
         accounts: body.accounts ?? [],
         ...(body.brief ? { brief: body.brief } : {}),
-        // Per-layer configs (same keys the plain-English AI layer editor writes)
         ...(body.layers && typeof body.layers === "object"
           ? Object.fromEntries(
               (["signals", "enroll", "replies"] as const)
