@@ -13,16 +13,21 @@ export async function instantlyCampaignStats(campaignId: string): Promise<Instan
   if (!instantlyConfigured() || !campaignId) return null;
   try {
     // Instantly's overview intermittently returns 0 from serverless IPs — retry and keep the real value.
+    // `reached` tracks whether Instantly answered at all; if nothing succeeded (e.g. 402 inactive plan,
+    // network), we return null so callers can show an honest "unavailable" state instead of fake zeros.
     let o: any = {};
+    let reached = false;
     for (let i = 0; i < 3; i++) {
       try {
         const r = await iget(`/campaigns/analytics/overview?id=${campaignId}`);
+        reached = true;
         if ((r?.emails_sent_count || 0) >= (o?.emails_sent_count || 0)) o = r;
         if ((r?.emails_sent_count || 0) > 0) break;
       } catch {}
     }
     let leads: any[] = [];
-    try { leads = (await ipost(`/leads/list`, { campaign: campaignId, limit: 100 })).items ?? []; } catch {}
+    try { leads = (await ipost(`/leads/list`, { campaign: campaignId, limit: 100 })).items ?? []; reached = true; } catch {}
+    if (!reached) return null;
     const byCompany: Record<string, number> = {};
     for (const l of leads) { const c = l.company_name || "—"; byCompany[c] = (byCompany[c] || 0) + 1; }
     return {
